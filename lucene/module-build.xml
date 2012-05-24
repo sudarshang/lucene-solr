@@ -490,4 +490,27 @@
     </ant>
     <property name="suggest-javadocs.uptodate" value="true"/>
   </target>
+
+  <property name="spatial-suggest.jar" value="${common.dir}/build/spatial-suggest/lucene-spatial-suggest-${version}.jar"/>
+  <target name="check-spatial-suggest-uptodate" unless="spatial-suggest.uptodate">
+    <module-uptodate name="spatial-suggest" jarfile="${spatial-suggest.jar}" property="spatial-suggest.uptodate"/>
+  </target>
+  <target name="jar-spatial-suggest" unless="spatial-suggest.uptodate" depends="check-spatial-suggest-uptodate">
+    <ant dir="${common.dir}/spatial-suggest" target="jar-core" inheritAll="false">
+      <propertyset refid="uptodate.and.compiled.properties"/>
+    </ant>
+    <property name="spatial-suggest.uptodate" value="true"/>
+  </target>
+
+  <property name="spatial-suggest-javadoc.jar" value="${common.dir}/build/spatial-suggest/lucene-spatial-suggest-${version}-javadoc.jar"/>
+  <target name="check-spatial-suggest-javadocs-uptodate" unless="spatial-suggest-javadocs.uptodate">
+    <module-uptodate name="spatial-suggest" jarfile="${spatial-suggest-javadoc.jar}" property="spatial-suggest-javadocs.uptodate"/>
+  </target>
+  <target name="javadocs-spatial-suggest" unless="spatial-suggest-javadocs.uptodate" depends="check-spatial-suggest-javadocs-uptodate">
+    <ant dir="${common.dir}/spatial-suggest" target="javadocs" inheritAll="false">
+      <propertyset refid="uptodate.and.compiled.properties"/>
+    </ant>
+    <property name="spatial-suggest-javadocs.uptodate" value="true"/>
+  </target>
+
 </project>
