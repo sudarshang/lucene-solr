@@ -60,7 +60,7 @@ import org.apache.lucene.util.fst.Util;
 import org.apache.lucene.util.fst.Util.MinResult;
 
 /**
- * Suggester based on a weighted FST: it first traverses the prefix, 
+ * Suggester based on a weighted FST: it first traverses the prefix,
  * then walks the <i>n</i> shortest paths to retrieve top-ranked
  * suggestions.
  * <p>
@@ -68,42 +68,42 @@ import org.apache.lucene.util.fst.Util.MinResult;
  * floating point weights, input weights should be whole numbers.
  * Input weights will be cast to a java integer, and any
  * negative, infinite, or NaN values will be rejected.
- * 
+ *
  * @see Util#shortestPaths(FST, FST.Arc, Comparator, int)
  * @lucene.experimental
  */
 public class AnalyzingCompletionLookup extends Lookup {
- 
+
   /**
-   * FST<Weight,Surface>: 
+   * FST<Weight,Surface>:
    *  input is the analyzed form, with a null byte between terms
    *  weights are encoded as costs: (Integer.MAX_VALUE-weight)
    *  surface is the original, unanalyzed form.
    */
   private FST<Pair<Long,BytesRef>> fst = null;
-  
-  /** 
-   * Analyzer that will be used for analyzing suggestions 
+
+  /**
+   * Analyzer that will be used for analyzing suggestions
    */
   private final Analyzer analyzer;
-  
-  /** 
+
+  /**
    * True if exact match suggestions should always be returned first.
    */
   private final boolean exactFirst;
-  
+
   /**
    * Calls {@link #AnalyzingCompletionLookup(Analyzer,boolean) AnalyzingCompletionLookup(analyzer, true)}
    */
   public AnalyzingCompletionLookup(Analyzer analyzer) {
     this(analyzer, true);
   }
-  
+
   /**
    * Creates a new suggester.
-   * 
+   *
    * @param analyzer Analyzer that will be used for analyzing suggestions.
-   * @param exactFirst <code>true</code> if suggestions that match the 
+   * @param exactFirst <code>true</code> if suggestions that match the
    *        prefix exactly should always be returned first, regardless
    *        of score. This has no performance impact, but could result
    *        in low-quality suggestions.
@@ -112,14 +112,14 @@ public class AnalyzingCompletionLookup extends Lookup {
     this.analyzer = analyzer;
     this.exactFirst = exactFirst;
   }
-  
+
   @Override
   public void build(TermFreqIterator iterator) throws IOException {
     String prefix = getClass().getSimpleName();
     File directory = Sort.defaultTempDir();
     File tempInput = File.createTempFile(prefix, ".input", directory);
     File tempSorted = File.createTempFile(prefix, ".sorted", directory);
-    
+
     Sort.ByteSequencesWriter writer = new Sort.ByteSequencesWriter(tempInput);
     Sort.ByteSequencesReader reader = null;
     BytesRef scratch = new BytesRef();
@@ -127,16 +127,16 @@ public class AnalyzingCompletionLookup extends Lookup {
     assert TokenStreamToAutomaton.POS_SEP < Byte.MAX_VALUE;
 
     BytesRef separator = new BytesRef(new byte[] { (byte)TokenStreamToAutomaton.POS_SEP });
-    
+
     // encoding:
-    // analyzed sequence + 0(byte) + weight(int) + surface + analyzedLength(short) 
+    // analyzed sequence + 0(byte) + weight(int) + surface + analyzedLength(short)
     boolean success = false;
     byte buffer[] = new byte[8];
     try {
       ByteArrayDataOutput output = new ByteArrayDataOutput(buffer);
       BytesRef spare;
       while ((spare = iterator.next()) != null) {
-        
+
         TokenStream ts = analyzer.tokenStream("", new StringReader(spare.utf8ToString()));
         Automaton automaton = TokenStreamToAutomaton.toAutomaton(ts);
         ts.end();
@@ -144,18 +144,18 @@ public class AnalyzingCompletionLookup extends Lookup {
         assert SpecialOperations.isFinite(automaton);
         // nocommit: we should probably not wire this param to -1 but have a reasonable limit?!
         Set<IntsRef> paths = SpecialOperations.getFiniteStrings(automaton, -1);
-        for (IntsRef path : paths) {        
+        for (IntsRef path : paths) {
 
           Util.toBytesRef(path, scratch);
-          
+
           // length of the analyzed text (FST input)
           short analyzedLength = (short) scratch.length;
           // compute the required length:
           // analyzed sequence + 12 (separator) + weight (4) + surface + analyzedLength (short)
           int requiredLength = analyzedLength + 2 + 4 + spare.length + 2;
-          
+
           buffer = ArrayUtil.grow(buffer, requiredLength);
-          
+
           output.reset(buffer);
           output.writeBytes(scratch.bytes, scratch.offset, scratch.length);
           output.writeByte((byte)0); // separator: not used, just for sort order
@@ -169,10 +169,10 @@ public class AnalyzingCompletionLookup extends Lookup {
       writer.close();
       new Sort().sort(tempInput, tempSorted);
       reader = new Sort.ByteSequencesReader(tempSorted);
-      
+
       PairOutputs<Long,BytesRef> outputs = new PairOutputs<Long,BytesRef>(PositiveIntOutputs.getSingleton(true), ByteSequenceOutputs.getSingleton());
       Builder<Pair<Long,BytesRef>> builder = new Builder<Pair<Long,BytesRef>>(FST.INPUT_TYPE.BYTE1, outputs);
-      
+
       BytesRef previous = null;
       BytesRef analyzed = new BytesRef();
       BytesRef surface = new BytesRef();
@@ -186,14 +186,14 @@ public class AnalyzingCompletionLookup extends Lookup {
         analyzed.bytes = scratch.bytes;
         analyzed.offset = scratch.offset;
         analyzed.length = analyzedLength;
-        
+
         input.setPosition(analyzedLength + 2); // analyzed sequence + separator
         long cost = input.readInt();
-   
+
         surface.bytes = scratch.bytes;
         surface.offset = input.getPosition();
         surface.length = input.length() - input.getPosition() - 2;
-        
+
         if (previous == null) {
           previous = new BytesRef();
         } else if (analyzed.equals(previous)) {
@@ -211,7 +211,7 @@ public class AnalyzingCompletionLookup extends Lookup {
       fst = builder.finish();
 
       //Util.dotToFile(fst, "/tmp/suggest.dot");
-      
+
       success = true;
     } finally {
       if (success) {
@@ -219,7 +219,7 @@ public class AnalyzingCompletionLookup extends Lookup {
       } else {
         IOUtils.closeWhileHandlingException(reader, writer);
       }
-      
+
       tempInput.delete();
       tempSorted.delete();
     }
@@ -272,7 +272,7 @@ public class AnalyzingCompletionLookup extends Lookup {
     CharsRef spare = new CharsRef();
 
     //System.out.println("  now intersect exactFirst=" + exactFirst);
-    
+
     // Intersect automaton w/ suggest wFST and get all
     // prefix starting nodes & their outputs:
     final List<FSTUtil.Path<Pair<Long,BytesRef>>> prefixPaths;
@@ -304,7 +304,8 @@ public class AnalyzingCompletionLookup extends Lookup {
     Util.TopNSearcher<Pair<Long,BytesRef>> searcher = new Util.TopNSearcher<Pair<Long,BytesRef>>(fst, num, weightComparator);
     for (FSTUtil.Path<Pair<Long,BytesRef>> path : prefixPaths) {
       try {
-        searcher.addStartPaths(path.fstNode, path.output, !exactFirst);
+        // TODO figure out a way of passing the input path here
+        searcher.addStartPaths(path.fstNode, path.output, null, !exactFirst);
       } catch (IOException bogus) {
         throw new RuntimeException(bogus);
       }
@@ -325,7 +326,7 @@ public class AnalyzingCompletionLookup extends Lookup {
 
     return results;
   }
-  
+
   /**
    * Returns the weight associated with an input string,
    * or null if it does not exist.
@@ -333,12 +334,12 @@ public class AnalyzingCompletionLookup extends Lookup {
   public Object get(CharSequence key) {
     throw new UnsupportedOperationException();
   }
-  
+
   /** cost -> weight */
   private static int decodeWeight(long encoded) {
     return (int)(Integer.MAX_VALUE - encoded);
   }
-  
+
   /** weight -> cost */
   private static int encodeWeight(long value) {
     if (value < 0 || value > Integer.MAX_VALUE) {
@@ -346,10 +347,10 @@ public class AnalyzingCompletionLookup extends Lookup {
     }
     return Integer.MAX_VALUE - (int)value;
   }
-   
+
   static final Comparator<Pair<Long,BytesRef>> weightComparator = new Comparator<Pair<Long,BytesRef>> () {
     public int compare(Pair<Long,BytesRef> left, Pair<Long,BytesRef> right) {
       return left.output1.compareTo(right.output1);
-    }  
+    }
   };
 }

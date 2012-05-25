@@ -103,7 +103,7 @@ public final class Util {
 
     // TODO: would be nice not to alloc this on every lookup
     FST.Arc<Long> arc = fst.getFirstArc(new FST.Arc<Long>());
-    
+
     FST.Arc<Long> scratchArc = new FST.Arc<Long>();
 
     final IntsRef result = new IntsRef();
@@ -133,7 +133,7 @@ public final class Util {
         if (result.ints.length == upto) {
           result.grow(1+upto);
         }
-        
+
         fst.readFirstRealTargetArc(arc.target, arc, in);
 
         if (arc.bytesPerArc != 0) {
@@ -227,20 +227,29 @@ public final class Util {
         //System.out.println("  no target arcs; not found!");
         return null;
       }
-    }    
+    }
   }
 
   private static class FSTPath<T> implements Comparable<FSTPath<T>> {
     public FST.Arc<T> arc;
     public T cost;
-    public final IntsRef input = new IntsRef();
+    public final IntsRef input;
     final Comparator<T> comparator;
 
     public FSTPath(T cost, FST.Arc<T> arc, Comparator<T> comparator) {
       this.arc = new FST.Arc<T>().copyFrom(arc);
       this.cost = cost;
       this.comparator = comparator;
+      this.input = new IntsRef();
     }
+
+    public FSTPath(T cost, FST.Arc<T> arc, IntsRef input, Comparator<T> comparator) {
+      this.arc = new FST.Arc<T>().copyFrom(arc);
+      this.cost = cost;
+      this.comparator = comparator;
+      this.input = input;
+    }
+
 
     @Override
     public String toString() {
@@ -266,7 +275,7 @@ public final class Util {
     private final int topN;
 
     private final FST.Arc<T> scratchArc = new FST.Arc<T>();
-    
+
     final Comparator<T> comparator;
 
     // Set once the queue has filled:
@@ -335,7 +344,7 @@ public final class Util {
 
     /** Adds all leaving arcs, including 'finished' arc, if
      *  the node is final, from this node into the queue.  */
-    public void addStartPaths(FST.Arc<T> node, T startOutput, boolean allowEmptyString) throws IOException {
+    public void addStartPaths(FST.Arc<T> node, T startOutput, IntsRef input, boolean allowEmptyString) throws IOException {
 
       T minArcCost = null;
       FST.Arc<T> minArc = null;
@@ -345,7 +354,7 @@ public final class Util {
         startOutput = fst.outputs.getNoOutput();
       }
 
-      FSTPath<T> path = new FSTPath<T>(startOutput, node, comparator);
+      FSTPath<T> path = new FSTPath<T>(startOutput, node, input, comparator);
       fst.readFirstTargetArc(node, path.arc);
 
       //System.out.println("add start paths");
@@ -417,7 +426,7 @@ public final class Util {
         }
 
         //System.out.println("  path: " + path);
-        
+
         // We take path and find its "0 output completion",
         // ie, just keep traversing the first arc with
         // NO_OUTPUT that we can find, since this must lead
@@ -427,7 +436,7 @@ public final class Util {
         // For each input letter:
         while (true) {
 
-          //System.out.println("\n    cycle path: " + path);         
+          //System.out.println("\n    cycle path: " + path);
           fst.readFirstTargetArc(path.arc, path.arc);
 
           // For each arc leaving this node:
@@ -478,7 +487,7 @@ public final class Util {
           }
         }
       }
-    
+
       @SuppressWarnings({"rawtypes","unchecked"}) final MinResult<T>[] arr =
         (MinResult<T>[]) new MinResult[results.size()];
       return results.toArray(arr);
@@ -508,7 +517,7 @@ public final class Util {
     }
   }
 
-  /** Starting from node, find the top N min cost 
+  /** Starting from node, find the top N min cost
    *  completions to a final node.
    *
    *  <p>NOTE: you must share the outputs when you build the
@@ -517,45 +526,48 @@ public final class Util {
   public static <T> MinResult<T>[] shortestPaths(FST<T> fst, FST.Arc<T> fromNode, T startOutput, Comparator<T> comparator, int topN,
                                                  boolean allowEmptyString) throws IOException {
     TopNSearcher<T> searcher = new TopNSearcher<T>(fst, topN, comparator);
-    searcher.addStartPaths(fromNode, startOutput, allowEmptyString);
+    // nocommit really we should take a start output in...?
+    // nocommit we should also take in allowEmptyString?  if
+    //   above exactFirst is true then we shouldn't allow it?
+    searcher.addStartPaths(fromNode, fst.outputs.getNoOutput(), null, true);
     return searcher.search();
-  } 
+  }
 
   /**
    * Dumps an {@link FST} to a GraphViz's <code>dot</code> language description
    * for visualization. Example of use:
-   * 
+   *
    * <pre class="prettyprint">
    * PrintWriter pw = new PrintWriter(&quot;out.dot&quot;);
    * Util.toDot(fst, pw, true, true);
    * pw.close();
    * </pre>
-   * 
+   *
    * and then, from command line:
-   * 
+   *
    * <pre>
    * dot -Tpng -o out.png out.dot
    * </pre>
-   * 
+   *
    * <p>
    * Note: larger FSTs (a few thousand nodes) won't even render, don't bother.
-   * 
+   *
    * @param sameRank
    *          If <code>true</code>, the resulting <code>dot</code> file will try
    *          to order states in layers of breadth-first traversal. This may
    *          mess up arcs, but makes the output FST's structure a bit clearer.
-   * 
+   *
    * @param labelStates
    *          If <code>true</code> states will have labels equal to their offsets in their
-   *          binary format. Expands the graph considerably. 
-   * 
+   *          binary format. Expands the graph considerably.
+   *
    * @see "http://www.graphviz.org/"
    */
-  public static <T> void toDot(FST<T> fst, Writer out, boolean sameRank, boolean labelStates) 
-    throws IOException {    
+  public static <T> void toDot(FST<T> fst, Writer out, boolean sameRank, boolean labelStates)
+    throws IOException {
     final String expandedNodeColor = "blue";
 
-    // This is the start arc in the automaton (from the epsilon state to the first state 
+    // This is the start arc in the automaton (from the epsilon state to the first state
     // with outgoing transitions.
     final FST.Arc<T> startArc = fst.getFirstArc(new FST.Arc<T>());
 
@@ -566,7 +578,7 @@ public final class Util {
     final List<FST.Arc<T>> nextLevelQueue = new ArrayList<FST.Arc<T>>();
     nextLevelQueue.add(startArc);
     //System.out.println("toDot: startArc: " + startArc);
-    
+
     // A list of states on the same level (for ranking).
     final List<Integer> sameLevelStates = new ArrayList<Integer>();
 
@@ -583,7 +595,7 @@ public final class Util {
     out.write("  rankdir = LR; splines=true; concentrate=true; ordering=out; ranksep=2.5; \n");
 
     if (!labelStates) {
-      out.write("  node [shape=circle, width=.2, height=.2, style=filled]\n");      
+      out.write("  node [shape=circle, width=.2, height=.2, style=filled]\n");
     }
 
     emitDotState(out, "initial", "point", "white", "");
@@ -609,7 +621,7 @@ public final class Util {
         isFinal = false;
         finalOutput = null;
       }
-      
+
       emitDotState(out, Integer.toString(startArc.target), isFinal ? finalStateShape : stateShape, stateColor, finalOutput == null ? "" : fst.outputs.outputToString(finalOutput));
     }
 
@@ -704,7 +716,7 @@ public final class Util {
 
             assert arc.label != FST.END_LABEL;
             out.write("  " + node + " -> " + arc.target + " [label=\"" + printableLabel(arc.label) + outs + "\"" + (arc.isFinal() ? " style=\"bold\"" : "" ) + " color=\"" + arcColor + "\"]\n");
-                   
+
             // Break the loop if we're on the last arc of this state.
             if (arc.isLast()) {
               //System.out.println("    break");
@@ -723,24 +735,24 @@ public final class Util {
         }
         out.write(" }\n");
       }
-      sameLevelStates.clear();                
+      sameLevelStates.clear();
     }
 
     // Emit terminating state (always there anyway).
     out.write("  -1 [style=filled, color=black, shape=doublecircle, label=\"\"]\n\n");
     out.write("  {rank=sink; -1 }\n");
-    
+
     out.write("}\n");
     out.flush();
   }
 
   /**
-   * Emit a single state in the <code>dot</code> language. 
+   * Emit a single state in the <code>dot</code> language.
    */
   private static void emitDotState(Writer out, String name, String shape,
       String color, String label) throws IOException {
-    out.write("  " + name 
-        + " [" 
+    out.write("  " + name
+        + " ["
         + (shape != null ? "shape=" + shape : "") + " "
         + (color != null ? "color=" + color : "") + " "
         + (label != null ? "label=\"" + label + "\"" : "label=\"\"") + " "
@@ -748,7 +760,7 @@ public final class Util {
   }
 
   /**
-   * Ensures an arc's label is indeed printable (dot uses US-ASCII). 
+   * Ensures an arc's label is indeed printable (dot uses US-ASCII).
    */
   private static String printableLabel(int label) {
     if (label >= 0x20 && label <= 0x7d) {
