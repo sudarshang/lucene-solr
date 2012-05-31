@@ -65,6 +65,9 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
 
     lookupResults = lookup.lookup("m", rect, 4);
     assertEquals(4, lookupResults.size());
+
+    lookupResults = lookup.lookup("m", rect, 5);
+    assertEquals(4, lookupResults.size());
   }
 
   @Test

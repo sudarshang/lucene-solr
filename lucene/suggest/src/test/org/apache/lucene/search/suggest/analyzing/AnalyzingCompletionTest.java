@@ -39,7 +39,7 @@ import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
 
 public class AnalyzingCompletionTest extends LuceneTestCase {
-  
+
   /** this is basically the WFST test ported to KeywordAnalyzer. so it acts the same */
   public void testKeyword() throws Exception {
     TermFreq keys[] = new TermFreq[] {
@@ -48,22 +48,22 @@ public class AnalyzingCompletionTest extends LuceneTestCase {
         new TermFreq("barbar", 12),
         new TermFreq("barbara", 6)
     };
-    
+
     AnalyzingCompletionLookup suggester = new AnalyzingCompletionLookup(new MockAnalyzer(random(), MockTokenizer.KEYWORD, false));
     suggester.build(new TermFreqArrayIterator(keys));
-    
+
     // top N of 2, but only foo is available
     List<LookupResult> results = suggester.lookup(_TestUtil.stringToCharSequence("f", random()), false, 2);
     assertEquals(1, results.size());
     assertEquals("foo", results.get(0).key.toString());
     assertEquals(50, results.get(0).value, 0.01F);
-    
+
     // top N of 1 for 'bar': we return this even though barbar is higher
     results = suggester.lookup(_TestUtil.stringToCharSequence("bar", random()), false, 1);
     assertEquals(1, results.size());
     assertEquals("bar", results.get(0).key.toString());
     assertEquals(10, results.get(0).value, 0.01F);
-    
+
     // top N Of 2 for 'b'
     results = suggester.lookup(_TestUtil.stringToCharSequence("b", random()), false, 2);
     assertEquals(2, results.size());
@@ -71,7 +71,7 @@ public class AnalyzingCompletionTest extends LuceneTestCase {
     assertEquals(12, results.get(0).value, 0.01F);
     assertEquals("bar", results.get(1).key.toString());
     assertEquals(10, results.get(1).value, 0.01F);
-    
+
     // top N of 3 for 'ba'
     results = suggester.lookup(_TestUtil.stringToCharSequence("ba", random()), false, 3);
     assertEquals(3, results.size());
@@ -82,7 +82,7 @@ public class AnalyzingCompletionTest extends LuceneTestCase {
     assertEquals("barbara", results.get(2).key.toString());
     assertEquals(6, results.get(2).value, 0.01F);
   }
-  
+
   // TODO: more tests
   /**
    * basic "standardanalyzer" test with stopword removal
@@ -91,11 +91,11 @@ public class AnalyzingCompletionTest extends LuceneTestCase {
     TermFreq keys[] = new TermFreq[] {
         new TermFreq("the ghost of christmas past", 50),
     };
-    
+
     Analyzer standard = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true, MockTokenFilter.ENGLISH_STOPSET, false);
     AnalyzingCompletionLookup suggester = new AnalyzingCompletionLookup(standard);
     suggester.build(new TermFreqArrayIterator(keys));
-    
+
     List<LookupResult> results = suggester.lookup(_TestUtil.stringToCharSequence("the ghost of chris", random()), false, 1);
     assertEquals(1, results.size());
     assertEquals("the ghost of christmas past", results.get(0).key.toString());
@@ -113,15 +113,29 @@ public class AnalyzingCompletionTest extends LuceneTestCase {
     assertEquals("the ghost of christmas past", results.get(0).key.toString());
     assertEquals(50, results.get(0).value, 0.01F);
   }
-  
+
+  public void testInputPathRequired() throws Exception {
+    TermFreq keys[] = new TermFreq[] {
+        new TermFreq("the ghost", 50),
+        new TermFreq("of ghost", 50),
+    };
+
+    Analyzer standard = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true, MockTokenFilter.ENGLISH_STOPSET, false);
+    AnalyzingCompletionLookup suggester = new AnalyzingCompletionLookup(standard);
+    suggester.build(new TermFreqArrayIterator(keys));
+    List<LookupResult> results = suggester.lookup(_TestUtil.stringToCharSequence("of g", random()), false, 1);
+    assertEquals(2, results.size());
+
+  }
+
   public void testRandom() throws Exception {
     int numWords = atLeast(1000);
-    
+
     final TreeMap<String,Long> slowCompletor = new TreeMap<String,Long>();
     final TreeSet<String> allPrefixes = new TreeSet<String>();
-    
+
     TermFreq[] keys = new TermFreq[numWords];
-    
+
     for (int i = 0; i < numWords; i++) {
       String s;
       while (true) {
@@ -132,7 +146,7 @@ public class AnalyzingCompletionTest extends LuceneTestCase {
           break;
         }
       }
-      
+
       for (int j = 1; j < s.length(); j++) {
         allPrefixes.add(s.substring(0, j));
       }
@@ -144,9 +158,9 @@ public class AnalyzingCompletionTest extends LuceneTestCase {
 
     AnalyzingCompletionLookup suggester = new AnalyzingCompletionLookup(new MockAnalyzer(random(), MockTokenizer.KEYWORD, false), false);
     suggester.build(new TermFreqArrayIterator(keys));
-    
+
     for (String prefix : allPrefixes) {
-    
+
       final int topN = _TestUtil.nextInt(random(), 1, 10);
       List<LookupResult> r = suggester.lookup(_TestUtil.stringToCharSequence(prefix, random()), false, topN);
 

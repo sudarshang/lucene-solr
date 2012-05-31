@@ -1,4 +1,20 @@
 package org.apache.lucene.search.spatial_suggest;
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import java.io.File;
 import java.io.IOException;
@@ -47,20 +63,36 @@ import com.spatial4j.core.shape.Shape;
 import com.spatial4j.core.shape.SpatialRelation;
 import com.spatial4j.core.util.GeohashUtils;
 
+/**
+ * Suggester based on WFST:
+ * Uses geohashes as a prefix to the input during the build and lookup stages to restrict suggestions
+ * to a particular geographical area.
+ *
+ */
 public class WFSTGeoSpatialLookup extends Lookup {
 
-  static String SEPERATOR = "|";
-  static byte[] BYTE_SEPERATOR = {0,0};
+  private static String SEPERATOR = "|";
+  private static byte[] BYTE_SEPERATOR = {0,0};
 
+  /**
+  * GEOHASH_KEY_SEPERATOR UTF-8 bytes for '|' character
+  */
   // any character that is not among the geohash prefix
   // characters works as a separator.
-  static byte[] GEOHASH_KEY_SEPERATOR = "|".getBytes(Charset.forName("UTF-8"));
+  private static byte[] GEOHASH_KEY_SEPERATOR = "|".getBytes(Charset.forName("UTF-8"));
 
-  // length of the most imprecise (largest) geohash prefix
+  /**
+   * minLevel:
+   * length of the most imprecise (largest) geohash prefix
+   */
   private final int minLevel;
 
-  // lenght of the most precise (smallest) geohash prefix
+  /**
+   * maxLevel:
+   * length of the most precise (smallest) geohash prefix
+   */
   private final int maxLevel;
+
   /**
    * FST<Weight,Display>:
    *  input is the suggestion input with the geohash prefix
@@ -81,6 +113,18 @@ public class WFSTGeoSpatialLookup extends Lookup {
     this.maxLevel = maxLevel;
   }
 
+  /*
+   * Builds the fst from the suggestion input.
+   * Expects the lookup returned by the iterator to have
+   * the following format
+   *
+   * suggestion|SuggestionDisplay|longitude|latitude
+   *
+   * This means that the original format in file would need to be
+   * suggestion|SuggestionDisplay|longitude|latitude\tweight as
+   * ther TermFreqIterator splits on the TAB character
+   *
+   */
   @Override
   public void build(TermFreqIterator iterator) throws IOException {
 
@@ -98,42 +142,42 @@ public class WFSTGeoSpatialLookup extends Lookup {
 
     try {
       ByteArrayDataOutput output = new ByteArrayDataOutput(buffer);
-      BytesRef spare;
-      while ((spare = iterator.next()) != null) {
+      BytesRef suggestInputTerm;
+      while ((suggestInputTerm = iterator.next()) != null) {
         // input has the following format
         // suggestion|SuggestionDisplay|longitude|latitude  weight
         // compute the required length of buffer:
         // spare.length - 3 (pipes) + 2 (separator) + weight (4) + MAX_LEVEL
 
-        int requiredLength = spare.length - 3 + 2 + 4 + this.maxLevel;
+        int requiredLength = suggestInputTerm.length - 3 + 2 + 4 + this.maxLevel;
         buffer = ArrayUtil.grow(buffer, requiredLength);
 
         byte separatorByte = SEPERATOR.getBytes("UTF8")[0];
 
-        int suggestSeperatorPos = indexOf(spare.bytes,
+        int suggestSeperatorPos = indexOf(suggestInputTerm.bytes,
                                           separatorByte,
                                           0,
-                                          spare.length);
+                                          suggestInputTerm.length);
 
-        int displaySeperatorPos = indexOf(spare.bytes,
+        int displaySeperatorPos = indexOf(suggestInputTerm.bytes,
                                           separatorByte,
                                           suggestSeperatorPos + 1,
-                                          spare.length);
+                                          suggestInputTerm.length);
 
-        int longitudeSeperatorPos = indexOf(spare.bytes,
+        int longitudeSeperatorPos = indexOf(suggestInputTerm.bytes,
                                             separatorByte,
                                             displaySeperatorPos + 1,
-                                            spare.length);
+                                            suggestInputTerm.length);
 
         Double longitude = Double.parseDouble(new String(
-                                                         spare.bytes,
+                                                         suggestInputTerm.bytes,
                                                          displaySeperatorPos + 1,
                                                          longitudeSeperatorPos - (displaySeperatorPos + 1))
                                                    );
         Double latitude = Double.parseDouble(new String(
-                                                        spare.bytes,
+                                                        suggestInputTerm.bytes,
                                                         longitudeSeperatorPos + 1,
-                                                        spare.length - (longitudeSeperatorPos + 1))
+                                                        suggestInputTerm.length - (longitudeSeperatorPos + 1))
                                                         );
         // combine the lookup string
         for (int level = minLevel; level <= maxLevel; level++) {
@@ -141,11 +185,11 @@ public class WFSTGeoSpatialLookup extends Lookup {
           byte[] geohash = GeohashUtils.encodeLatLon(latitude, longitude, level).getBytes("UTF8");
           output.writeBytes(geohash, 0, geohash.length);
           output.writeBytes(GEOHASH_KEY_SEPERATOR, 0, GEOHASH_KEY_SEPERATOR.length);
-          output.writeBytes(spare.bytes, 0, suggestSeperatorPos);
+          output.writeBytes(suggestInputTerm.bytes, 0, suggestSeperatorPos);
           output.writeByte((byte)0); // separator: not used, just for sort order
           output.writeByte((byte)0); // separator: not used, just for sort order
           output.writeInt((int)encodeWeight(iterator.weight()));
-          output.writeBytes(spare.bytes, suggestSeperatorPos + 1,
+          output.writeBytes(suggestInputTerm.bytes, suggestSeperatorPos + 1,
                               displaySeperatorPos - (suggestSeperatorPos + 1));
           writer.write(buffer, 0, output.getPosition());
         }
@@ -172,7 +216,6 @@ public class WFSTGeoSpatialLookup extends Lookup {
       // setup locals to store next entry
       BytesRef nextSuggestInput = new BytesRef();
       BytesRef nextSuggestDisplay = new BytesRef();
-      ByteArrayDataInput nextInput = new ByteArrayDataInput();
 
       BytesRef nextScratch = new BytesRef();
 
@@ -187,7 +230,6 @@ public class WFSTGeoSpatialLookup extends Lookup {
         suggestInput.offset = scratch.offset;
         suggestInput.length = separatorPos;
 
-
         input.setPosition(separatorPos + 2); // suggestDisplay + separator
         cost = input.readInt();
 
@@ -198,19 +240,18 @@ public class WFSTGeoSpatialLookup extends Lookup {
 
       while (reader.read(nextScratch)) {
         // get the next entry
-        nextInput.reset(nextScratch.bytes, nextScratch.offset, nextScratch.length);
+        input.reset(nextScratch.bytes, nextScratch.offset, nextScratch.length);
 
         separatorPos = indexOf(nextScratch.bytes, BYTE_SEPERATOR);
         nextSuggestInput.bytes = nextScratch.bytes;
         nextSuggestInput.offset = nextScratch.offset;
         nextSuggestInput.length = separatorPos;
-        nextInput.setPosition(separatorPos + 2); // suggestDisplay + separator
-        long nextCost = nextInput.readInt();
+        input.setPosition(separatorPos + 2); // suggestDisplay + separator
+        long nextCost = input.readInt();
 
         nextSuggestDisplay.bytes = nextScratch.bytes;
-        nextSuggestDisplay.offset = nextInput.getPosition();
-        nextSuggestDisplay.length = nextInput.length() - nextInput.getPosition();
-
+        nextSuggestDisplay.offset = input.getPosition();
+        nextSuggestDisplay.length = input.length() - input.getPosition();
 
         if (!nextSuggestInput.bytesEquals(suggestInput)) {
           // next entry is not a duplicate so add previous entry to the fst
@@ -248,23 +289,23 @@ public class WFSTGeoSpatialLookup extends Lookup {
   }
 
   /**
-   * Use scratch as input to walk to a node in an fst
-   * @param scratch
+   * Use prefix as input to walk to a node in an fst
+   * @param prefix
    * @param arc - contains the initial node to start the walk from and is modified to point to the
    *              destination of the walk
    * @return - output collected till the end node
    * @throws IOException
    */
-  private Pair<Long,BytesRef> lookupPrefix(BytesRef scratch, Arc<Pair<Long,BytesRef>> arc) throws /*Bogus*/IOException {
+  private Pair<Long,BytesRef> lookupPrefix(BytesRef prefix, Arc<Pair<Long,BytesRef>> arc) throws /*Bogus*/IOException {
     Pair<Long,BytesRef> output = fst.outputs.getNoOutput();
 
     BytesReader bytesReader = fst.getBytesReader(0);
 
     fst.getFirstArc(arc);
 
-    byte[] bytes = scratch.bytes;
-    int pos = scratch.offset;
-    int end = pos + scratch.length;
+    byte[] bytes = prefix.bytes;
+    int pos = prefix.offset;
+    int end = pos + prefix.length;
     while (pos < end) {
       if (fst.findTargetArc(bytes[pos++] & 0xff, arc, arc, bytesReader) == null) {
         return null;
@@ -280,8 +321,11 @@ public class WFSTGeoSpatialLookup extends Lookup {
    * Return top 'num' suggestions with key as the prefix and restricted to the geographical
    * area under shape
    * @param key
+   *         prefix for the suggestions
    * @param shape
+   *          geographical shape by which suggestions are restricted
    * @param num
+   *          maximum number of suggestions to return
    * @return
    */
   public List<LookupResult> lookup(CharSequence key, Shape shape,
@@ -315,7 +359,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
         System.arraycopy(keyBytes.bytes, 0, scratch.bytes,
             hashBytes.length + GEOHASH_KEY_SEPERATOR.length, keyBytes.length);
         scratch.offset = 0;
-        scratch.length = hashBytes.length +  GEOHASH_KEY_SEPERATOR.length + keyBytes.length;
+        scratch.length = hashBytes.length + GEOHASH_KEY_SEPERATOR.length + keyBytes.length;
 
         Arc<Pair<Long,BytesRef>> arc = new Arc<Pair<Long,BytesRef>>();
         Pair<Long,BytesRef> prefixOutput;
@@ -359,6 +403,9 @@ public class WFSTGeoSpatialLookup extends Lookup {
 
     if (exactFirstResult != null) {
       results.add(exactFirstResult);
+      if (results.size() == num) {
+        return results;
+      }
     }
 
     for (MinResult<Pair<Long,BytesRef>> completion : completions) {
@@ -374,6 +421,12 @@ public class WFSTGeoSpatialLookup extends Lookup {
     return results;
   }
 
+  /**
+   * Returns a list of Nodes (geohashes) that are within the specified minLevel and maxLevels
+   * and completely cover the shape
+   * @param shape
+   * @return
+   */
   private List<Node> getHashesForShape(Shape shape) {
     GeohashPrefixTree grid = new GeohashPrefixTree(new SimpleSpatialContext(DistanceUnits.MILES),
         GeohashUtils.MAX_PRECISION);
@@ -385,7 +438,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
     while(!cells.isEmpty()) {
       final Node cell = cells.removeFirst();
 
-      if (cell.getShapeRel() == SpatialRelation.WITHIN) {
+      if (cell.getShapeRel() == SpatialRelation.WITHIN && cell.getLevel() > minLevel) {
         // if the geohash is contained in the shape add it
         result.add(cell);
       } else if (cell.getLevel() == maxLevel || cell.isLeaf()) {
@@ -403,9 +456,6 @@ public class WFSTGeoSpatialLookup extends Lookup {
   public boolean store(OutputStream output) throws IOException {
     try {
       fst.save(new OutputStreamDataOutput(output));
-      PrintWriter pw = new PrintWriter("out.dot");
-      Util.toDot(fst, pw, true, true);
-      pw.close();
     } finally {
       IOUtils.close(output);
     }
@@ -453,6 +503,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
   }
 
   // copy passted from Gauva Bytes class
+  // nocommit need to find the right home for the following two methods
   /**
    * Returns the start position of the first occurrence of the specified {@code
    * target} within {@code array}, or {@code -1} if there is no such occurrence.

@@ -491,6 +491,9 @@
     <property name="suggest-javadocs.uptodate" value="true"/>
   </target>
 
+	<!--Spatial Suggest depends on both the spatial and suggest modules. I have added it a separate module because neither 
+	of these modules should depend on each other.
+	-->
   <property name="spatial-suggest.jar" value="${common.dir}/build/spatial-suggest/lucene-spatial-suggest-${version}.jar"/>
   <target name="check-spatial-suggest-uptodate" unless="spatial-suggest.uptodate">
     <module-uptodate name="spatial-suggest" jarfile="${spatial-suggest.jar}" property="spatial-suggest.uptodate"/>

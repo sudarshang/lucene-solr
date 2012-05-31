@@ -21,6 +21,7 @@ package org.apache.lucene.search.spatial_suggest;
 import java.util.List;
 import java.util.Locale;
 
+// nocommit move Average to test framework?
 // This class has been copied from
 // lucene/suggest/src/test/org/apache/lucene/search/suggest/Average.java
 /**

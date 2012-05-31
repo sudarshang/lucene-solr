@@ -18,7 +18,7 @@ import org.apache.lucene.util.BytesRef;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+// nocommit move TermFreq to test framework?
 // The class TermFreq has been copied from
 // lucene/suggest/src/test/org/apache/lucene/search/suggest/TermFreq.java
 public final class TermFreq {

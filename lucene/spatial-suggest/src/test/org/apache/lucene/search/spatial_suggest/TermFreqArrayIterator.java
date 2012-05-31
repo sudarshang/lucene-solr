@@ -25,6 +25,7 @@ import org.apache.lucene.util.BytesRef;
  * limitations under the License.
  */
 
+// nocommit move TermFreq to test framework?
 // The class TermFreqArrayIterator has been copied from
 // lucene/suggest/src/test/org/apache/lucene/search/suggest/TermFreqArrayIterator.java
 public final class TermFreqArrayIterator implements TermFreqIterator {
