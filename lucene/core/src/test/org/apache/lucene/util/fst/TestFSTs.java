@@ -2000,9 +2000,11 @@ public class TestFSTs extends LuceneTestCase {
     //w.close();
 
     Util.MinResult<Long>[] r = Util.shortestPaths(fst,
-                                           fst.getFirstArc(new FST.Arc<Long>()),
-                                           minLongComparator,
-                                           3);
+                                                  fst.getFirstArc(new FST.Arc<Long>()),
+                                                  outputs.getNoOutput(),
+                                                  minLongComparator,
+                                                  3,
+                                                  true);
     assertEquals(3, r.length);
 
     assertEquals(Util.toIntsRef(new BytesRef("aac"), scratch), r[0].input);
@@ -2042,9 +2044,11 @@ public class TestFSTs extends LuceneTestCase {
     //w.close();
 
     Util.MinResult<Pair<Long,Long>>[] r = Util.shortestPaths(fst,
-                                           fst.getFirstArc(new FST.Arc<Pair<Long,Long>>()),
-                                           minPairWeightComparator,
-                                           3);
+                                                             fst.getFirstArc(new FST.Arc<Pair<Long,Long>>()),
+                                                             outputs.getNoOutput(),
+                                                             minPairWeightComparator,
+                                                             3,
+                                                             true);
     assertEquals(3, r.length);
 
     assertEquals(Util.toIntsRef(new BytesRef("aac"), scratch), r[0].input);
@@ -2116,7 +2120,7 @@ public class TestFSTs extends LuceneTestCase {
 
       final int topN = _TestUtil.nextInt(random, 1, 10);
 
-      Util.MinResult<Long>[] r = Util.shortestPaths(fst, arc, minLongComparator, topN);
+      Util.MinResult<Long>[] r = Util.shortestPaths(fst, arc, fst.outputs.getNoOutput(), minLongComparator, topN, true);
 
       // 2. go thru whole treemap (slowCompletor) and check its actually the best suggestion
       final List<Util.MinResult<Long>> matches = new ArrayList<Util.MinResult<Long>>();
@@ -2220,7 +2224,7 @@ public class TestFSTs extends LuceneTestCase {
 
       final int topN = _TestUtil.nextInt(random, 1, 10);
 
-      Util.MinResult<Pair<Long,Long>>[] r = Util.shortestPaths(fst, arc, minPairWeightComparator, topN);
+      Util.MinResult<Pair<Long,Long>>[] r = Util.shortestPaths(fst, arc, fst.outputs.getNoOutput(), minPairWeightComparator, topN, true);
 
       // 2. go thru whole treemap (slowCompletor) and check its actually the best suggestion
       final List<Util.MinResult<Pair<Long,Long>>> matches = new ArrayList<Util.MinResult<Pair<Long,Long>>>();

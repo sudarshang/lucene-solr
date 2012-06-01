@@ -258,11 +258,14 @@ public final class Util {
     }
   }
 
-  private static class TopNSearcher<T> {
+  /** Utility class to find top N shortest paths from start
+   *  point(s). */
+  public static class TopNSearcher<T> {
 
     private final FST<T> fst;
-    private final FST.Arc<T> fromNode;
     private final int topN;
+
+    private final FST.Arc<T> scratchArc = new FST.Arc<T>();
     
     final Comparator<T> comparator;
 
@@ -271,11 +274,12 @@ public final class Util {
 
     TreeSet<FSTPath<T>> queue = null;
 
-    public TopNSearcher(FST<T> fst, FST.Arc<T> fromNode, int topN, Comparator<T> comparator) {
+    public TopNSearcher(FST<T> fst, int topN, Comparator<T> comparator) {
       this.fst = fst;
       this.topN = topN;
-      this.fromNode = fromNode;
       this.comparator = comparator;
+
+      queue = new TreeSet<FSTPath<T>>();
     }
 
     // If back plus this arc is competitive then add to queue:
@@ -329,9 +333,42 @@ public final class Util {
       }
     }
 
+    /** Adds all leaving arcs, including 'finished' arc, if
+     *  the node is final, from this node into the queue.  */
+    public void addStartPaths(FST.Arc<T> node, T startOutput, boolean allowEmptyString) throws IOException {
+
+      T minArcCost = null;
+      FST.Arc<T> minArc = null;
+
+      // De-dup NO_OUTPUT since it must be a singleton:
+      if (startOutput.equals(fst.outputs.getNoOutput())) {
+        startOutput = fst.outputs.getNoOutput();
+      }
+
+      FSTPath<T> path = new FSTPath<T>(startOutput, node, comparator);
+      fst.readFirstTargetArc(node, path.arc);
+
+      //System.out.println("add start paths");
+
+      // Bootstrap: find the min starting arc
+      while (true) {
+        if (allowEmptyString || path.arc.label != FST.END_LABEL) {
+          T arcScore = path.arc.output;
+          if (minArcCost == null || comparator.compare(arcScore, minArcCost) < 0) {
+            minArcCost = arcScore;
+            minArc = scratchArc.copyFrom(path.arc);
+            //System.out.println("    **");
+          }
+          addIfCompetitive(path);
+        }
+        if (path.arc.isLast()) {
+          break;
+        }
+        fst.readNextArc(path.arc);
+      }
+    }
+
     public MinResult<T>[] search() throws IOException {
-      //System.out.println("  search topN=" + topN);
-      final FST.Arc<T> scratchArc = new FST.Arc<T>();
 
       final List<MinResult<T>> results = new ArrayList<MinResult<T>>();
 
@@ -351,68 +388,20 @@ public final class Util {
         FSTPath<T> path;
 
         if (queue == null) {
-
-          if (results.size() != 0) {
-            // Ran out of paths
-            break;
-          }
-
-          // First pass (top path): start from original fromNode
-          if (topN > 1) {
-            queue = new TreeSet<FSTPath<T>>();
-          }
-
-          T minArcCost = null;
-          FST.Arc<T> minArc = null;
-
-          path = new FSTPath<T>(NO_OUTPUT, fromNode, comparator);
-          fst.readFirstTargetArc(fromNode, path.arc);
-
-          // Bootstrap: find the min starting arc
-          while (true) {
-            T arcScore = path.arc.output;
-            //System.out.println("  arc=" + (char) path.arc.label + " cost=" + arcScore);
-            if (minArcCost == null || comparator.compare(arcScore, minArcCost) < 0) {
-              minArcCost = arcScore;
-              minArc = scratchArc.copyFrom(path.arc);
-              //System.out.println("    **");
-            }
-            if (queue != null) {
-              addIfCompetitive(path);
-            }
-            if (path.arc.isLast()) {
-              break;
-            }
-            fst.readNextArc(path.arc);
-          }
-
-          assert minArc != null;
-
-          if (queue != null) {
-            // Remove top path since we are now going to
-            // pursue it:
-            path = queue.pollFirst();
-            //System.out.println("  remove init path=" + path);
-            assert path.arc.label == minArc.label;
-            if (bottom != null && queue.size() == topN-1) {
-              bottom = queue.last();
-              //System.out.println("    set init bottom: " + bottom);
-            }
-          } else {
-            path.arc.copyFrom(minArc);
-            path.input.grow(1);
-            path.input.ints[0] = minArc.label;
-            path.input.length = 1;
-            path.cost = minArc.output;
-          }
-
-        } else {
-          path = queue.pollFirst();
-          if (path == null) {
-            // There were less than topN paths available:
-            break;
-          }
+          // Ran out of paths
+          break;
         }
+
+        // Remove top path since we are now going to
+        // pursue it:
+        path = queue.pollFirst();
+
+        if (path == null) {
+          // There were less than topN paths available:
+          break;
+        }
+
+        //System.out.println("  remove init path=" + path);
 
         if (path.arc.label == FST.END_LABEL) {
           //System.out.println("    empty string!  cost=" + path.cost);
@@ -520,14 +509,16 @@ public final class Util {
   }
 
   /** Starting from node, find the top N min cost 
-   * completions to a final node.
+   *  completions to a final node.
    *
    *  <p>NOTE: you must share the outputs when you build the
    *  FST (pass doShare=true to {@link
    *  PositiveIntOutputs#getSingleton}). */
-
-  public static <T> MinResult<T>[] shortestPaths(FST<T> fst, FST.Arc<T> fromNode, Comparator<T> comparator, int topN) throws IOException {
-    return new TopNSearcher<T>(fst, fromNode, topN, comparator).search();
+  public static <T> MinResult<T>[] shortestPaths(FST<T> fst, FST.Arc<T> fromNode, T startOutput, Comparator<T> comparator, int topN,
+                                                 boolean allowEmptyString) throws IOException {
+    TopNSearcher<T> searcher = new TopNSearcher<T>(fst, topN, comparator);
+    searcher.addStartPaths(fromNode, startOutput, allowEmptyString);
+    return searcher.search();
   } 
 
   /**
@@ -824,4 +815,14 @@ public final class Util {
     scratch.length = input.length;
     return scratch;
   }
+
+  // Uncomment for debugging:
+
+  /*
+  public static <T> void dotToFile(FST<T> fst, String filePath) throws IOException {
+    Writer w = new OutputStreamWriter(new FileOutputStream(filePath));
+    toDot(fst, w, true, true);
+    w.close();
+  }
+  */
 }
