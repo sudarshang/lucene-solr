@@ -304,8 +304,7 @@ public class AnalyzingCompletionLookup extends Lookup {
     Util.TopNSearcher<Pair<Long,BytesRef>> searcher = new Util.TopNSearcher<Pair<Long,BytesRef>>(fst, num, weightComparator);
     for (FSTUtil.Path<Pair<Long,BytesRef>> path : prefixPaths) {
       try {
-        // TODO figure out a way of passing the input path here
-        searcher.addStartPaths(path.fstNode, path.output, null, !exactFirst);
+        searcher.addStartPaths(path.fstNode, path.output, new IntsRef(), !exactFirst);
       } catch (IOException bogus) {
         throw new RuntimeException(bogus);
       }

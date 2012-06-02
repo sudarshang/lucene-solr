@@ -26,7 +26,7 @@ import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
 
 public class WFSTCompletionTest extends LuceneTestCase {
-  
+
   public void test() throws Exception {
     TermFreq keys[] = new TermFreq[] {
         new TermFreq("foo", 50),
@@ -34,11 +34,11 @@ public class WFSTCompletionTest extends LuceneTestCase {
         new TermFreq("barbar", 12),
         new TermFreq("barbara", 6)
     };
-    
+
     Random random = new Random(random().nextLong());
     WFSTCompletionLookup suggester = new WFSTCompletionLookup();
     suggester.build(new TermFreqArrayIterator(keys));
-    
+
     // top N of 2, but only foo is available
     List<LookupResult> results = suggester.lookup(_TestUtil.stringToCharSequence("f", random), false, 2);
     assertEquals(1, results.size());
@@ -56,7 +56,7 @@ public class WFSTCompletionTest extends LuceneTestCase {
     assertEquals(1, results.size());
     assertEquals("bar", results.get(0).key.toString());
     assertEquals(10, results.get(0).value, 0.01F);
-    
+
     // top N Of 2 for 'b'
     results = suggester.lookup(_TestUtil.stringToCharSequence("b", random), false, 2);
     assertEquals(2, results.size());
@@ -64,7 +64,7 @@ public class WFSTCompletionTest extends LuceneTestCase {
     assertEquals(12, results.get(0).value, 0.01F);
     assertEquals("bar", results.get(1).key.toString());
     assertEquals(10, results.get(1).value, 0.01F);
-    
+
     // top N of 3 for 'ba'
     results = suggester.lookup(_TestUtil.stringToCharSequence("ba", random), false, 3);
     assertEquals(3, results.size());
@@ -75,15 +75,15 @@ public class WFSTCompletionTest extends LuceneTestCase {
     assertEquals("barbara", results.get(2).key.toString());
     assertEquals(6, results.get(2).value, 0.01F);
   }
-  
+
   public void testRandom() throws Exception {
     int numWords = atLeast(1000);
-    
+
     final TreeMap<String,Long> slowCompletor = new TreeMap<String,Long>();
     final TreeSet<String> allPrefixes = new TreeSet<String>();
-    
+
     TermFreq[] keys = new TermFreq[numWords];
-    
+
     for (int i = 0; i < numWords; i++) {
       String s;
       while (true) {
@@ -94,7 +94,7 @@ public class WFSTCompletionTest extends LuceneTestCase {
           break;
         }
       }
-      
+
       for (int j = 1; j < s.length(); j++) {
         allPrefixes.add(s.substring(0, j));
       }
@@ -140,7 +140,7 @@ public class WFSTCompletionTest extends LuceneTestCase {
       assertEquals(matches.size(), r.size());
 
       for(int hit=0;hit<r.size();hit++) {
-        //System.out.println("  check hit " + hit);
+        System.out.println("  check hit " + hit);
         assertEquals(matches.get(hit).key.toString(), r.get(hit).key.toString());
         assertEquals(matches.get(hit).value, r.get(hit).value, 0f);
       }

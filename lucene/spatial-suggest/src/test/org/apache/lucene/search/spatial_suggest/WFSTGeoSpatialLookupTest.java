@@ -30,8 +30,9 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
 
   @Test
   public void testWFSTGeoSpatialLookupTest() throws FileNotFoundException, IOException {
-    // the locations of the first 4 businesses are in Alaska
+    // the locations of the first 4 businesses are in San Francisco
     // the score for all of them have been randomly picked
+    System.err.println("in the test");
     TermFreq keys[] = new TermFreq[] {
         new TermFreq("men & women ctr|Men & Women Ctr|-122.420558|37.805775", 865),
         new TermFreq("mo|Mo|-122.420558|37.805775", 1),
@@ -68,6 +69,42 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
 
     lookupResults = lookup.lookup("m", rect, 5);
     assertEquals(4, lookupResults.size());
+
+    // test with exact first = true
+    lookup = new WFSTGeoSpatialLookup(true, 4, 5);
+    lookup.build(new TermFreqArrayIterator(keys));
+    lookupResults = lookup.lookup("m", rect, 3);
+    assertEquals(3, lookupResults.size());
+    assertEquals("Moondog Visions", lookupResults.get(2).key);
+
+    lookupResults = lookup.lookup("m", rect, 2);
+    assertEquals(2, lookupResults.size());
+    assertEquals("Molarbytes", lookupResults.get(1).key);
+
+    lookupResults = lookup.lookup("m", rect, 1);
+    assertEquals(1, lookupResults.size());
+    assertEquals("Men & Women Ctr", lookupResults.get(0).key);
+
+    lookupResults = lookup.lookup("molar", rect, 1);
+    assertEquals(1, lookupResults.size());
+    assertEquals("Molarbytes", lookupResults.get(0).key);
+
+    lookupResults = lookup.lookup("m", rect, 4);
+    assertEquals(4, lookupResults.size());
+
+    lookupResults = lookup.lookup("m", rect, 5);
+    assertEquals(4, lookupResults.size());
+
+    lookupResults = lookup.lookup("molarbytes", rect, 1);
+    assertEquals(1, lookupResults.size());
+
+    // test with much larger rectangle which should have geohashes smaller
+    // in length than minLevel
+    lookupResults = lookup.lookup("m",
+                                new RectangleImpl(-123.0, -120.0, 36.0, 38.0),
+                                  5);
+    assertEquals(4, lookupResults.size());
+
   }
 
   @Test

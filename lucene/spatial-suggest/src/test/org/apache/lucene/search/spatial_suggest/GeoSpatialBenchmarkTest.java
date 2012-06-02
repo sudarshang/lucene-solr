@@ -36,6 +36,7 @@ import org.apache.lucene.search.spatial_suggest.TermFreqArrayIterator;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.RamUsageEstimator;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 
 import com.spatial4j.core.shape.simple.RectangleImpl;
 
@@ -50,7 +51,7 @@ import com.spatial4j.core.shape.simple.RectangleImpl;
  *
  * This test closely mirrors LookupBenchmarkTest.
  */
-
+@Ignore("COMMENT ME TO RUN BENCHMARKS!")
 public class GeoSpatialBenchmarkTest extends LuceneTestCase{
 
   static final Charset UTF_8 = Charset.forName("UTF-8");

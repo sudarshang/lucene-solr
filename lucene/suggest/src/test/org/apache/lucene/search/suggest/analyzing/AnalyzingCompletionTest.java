@@ -17,7 +17,6 @@ package org.apache.lucene.search.suggest.analyzing;
  * limitations under the License.
  */
 
-import java.io.Reader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -30,8 +29,6 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenFilter;
 import org.apache.lucene.analysis.MockTokenizer;
-import org.apache.lucene.analysis.TokenStream;
-import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.search.suggest.Lookup.LookupResult;
 import org.apache.lucene.search.suggest.TermFreq;
 import org.apache.lucene.search.suggest.TermFreqArrayIterator;
@@ -112,20 +109,6 @@ public class AnalyzingCompletionTest extends LuceneTestCase {
     assertEquals(1, results.size());
     assertEquals("the ghost of christmas past", results.get(0).key.toString());
     assertEquals(50, results.get(0).value, 0.01F);
-  }
-
-  public void testInputPathRequired() throws Exception {
-    TermFreq keys[] = new TermFreq[] {
-        new TermFreq("the ghost", 50),
-        new TermFreq("of ghost", 50),
-    };
-
-    Analyzer standard = new MockAnalyzer(random(), MockTokenizer.WHITESPACE, true, MockTokenFilter.ENGLISH_STOPSET, false);
-    AnalyzingCompletionLookup suggester = new AnalyzingCompletionLookup(standard);
-    suggester.build(new TermFreqArrayIterator(keys));
-    List<LookupResult> results = suggester.lookup(_TestUtil.stringToCharSequence("of g", random()), false, 1);
-    assertEquals(2, results.size());
-
   }
 
   public void testRandom() throws Exception {

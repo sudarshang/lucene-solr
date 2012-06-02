@@ -236,20 +236,12 @@ public final class Util {
     public final IntsRef input;
     final Comparator<T> comparator;
 
-    public FSTPath(T cost, FST.Arc<T> arc, Comparator<T> comparator) {
-      this.arc = new FST.Arc<T>().copyFrom(arc);
-      this.cost = cost;
-      this.comparator = comparator;
-      this.input = new IntsRef();
-    }
-
     public FSTPath(T cost, FST.Arc<T> arc, IntsRef input, Comparator<T> comparator) {
       this.arc = new FST.Arc<T>().copyFrom(arc);
       this.cost = cost;
       this.comparator = comparator;
       this.input = input;
     }
-
 
     @Override
     public String toString() {
@@ -321,7 +313,7 @@ public final class Util {
         // Queue isn't full yet, so any path we hit competes:
       }
 
-      final FSTPath<T> newPath = new FSTPath<T>(cost, path.arc, comparator);
+      final FSTPath<T> newPath = new FSTPath<T>(cost, path.arc, new IntsRef(), comparator);
 
       newPath.input.grow(path.input.length+1);
       System.arraycopy(path.input.ints, 0, newPath.input.ints, 0, path.input.length);
@@ -526,10 +518,7 @@ public final class Util {
   public static <T> MinResult<T>[] shortestPaths(FST<T> fst, FST.Arc<T> fromNode, T startOutput, Comparator<T> comparator, int topN,
                                                  boolean allowEmptyString) throws IOException {
     TopNSearcher<T> searcher = new TopNSearcher<T>(fst, topN, comparator);
-    // nocommit really we should take a start output in...?
-    // nocommit we should also take in allowEmptyString?  if
-    //   above exactFirst is true then we shouldn't allow it?
-    searcher.addStartPaths(fromNode, fst.outputs.getNoOutput(), null, true);
+    searcher.addStartPaths(fromNode, startOutput, new IntsRef(), allowEmptyString);
     return searcher.search();
   }
 
