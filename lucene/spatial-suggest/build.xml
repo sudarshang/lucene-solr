@@ -30,10 +30,22 @@
 
   <path id="classpath">
     <pathelement path="${suggest.jar}"/>
-	<pathelement path="${spatial.jar}"/>
-	<path refid="spatialjar"/>
+    <pathelement path="${spatial.jar}"/>
+    <path refid="spatialjar"/>
     <path refid="base.classpath"/>
   </path>
+
+  <target name="compile-core" depends="jar-spatial,jar-suggest,common.compile-core" />
+
+  <target name="javadocs" depends="javadocs-spatial,javadocs-suggest,compile-core">
+    <invoke-module-javadoc>
+      <links>
+        <link href="../spatial"/>
+		<link href="../suggest"/>
+      </links>
+    </invoke-module-javadoc>
+  </target>
+
 
   <!-- tsv files provide input for suggestions -->
   <property name="rat.excludes" value="**/*.tsv"/>

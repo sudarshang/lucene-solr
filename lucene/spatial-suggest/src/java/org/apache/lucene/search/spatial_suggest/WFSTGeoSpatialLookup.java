@@ -107,6 +107,15 @@ public class WFSTGeoSpatialLookup extends Lookup {
   // an exact match (if one exists) will be the first suggestion
   private final boolean exactFirst;
 
+  /**
+   * Creates a new geospatial suggester
+   * @param exactFirst <code>true</code> if suggestions that match the
+   *        prefix exactly should always be returned first, regardless
+   *        of score. This has no performance impact, but could result
+   *        in low-quality suggestions.
+   * @param minLevel geohash level for the most imprecise geohashes
+   * @param maxLevel geohash level for the most precise geohashes
+   */
   public WFSTGeoSpatialLookup(boolean exactFirst, int minLevel, int maxLevel) {
     this.exactFirst = exactFirst;
     this.minLevel = minLevel;
@@ -118,7 +127,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
    * Expects the lookup returned by the iterator to have
    * the following format
    *
-   * suggestion|SuggestionDisplay|longitude|latitude
+   * suggestion|SuggestionDisplay|latitude|longitude
    *
    * This means that the original format in file would need to be
    * suggestion|SuggestionDisplay|longitude|latitude\tweight as
@@ -145,7 +154,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
       BytesRef suggestInputTerm;
       while ((suggestInputTerm = iterator.next()) != null) {
         // input has the following format
-        // suggestion|SuggestionDisplay|longitude|latitude  weight
+        // suggestion|SuggestionDisplay|latitude|longitude  weight
         // compute the required length of buffer:
         // spare.length - 3 (pipes) + 2 (separator) + weight (4) + MAX_LEVEL
 
@@ -164,20 +173,18 @@ public class WFSTGeoSpatialLookup extends Lookup {
                                           suggestSeperatorPos + 1,
                                           suggestInputTerm.length);
 
-        int longitudeSeperatorPos = indexOf(suggestInputTerm.bytes,
+        int latitudeSeperatorPos = indexOf(suggestInputTerm.bytes,
                                             separatorByte,
                                             displaySeperatorPos + 1,
                                             suggestInputTerm.length);
 
-        Double longitude = Double.parseDouble(new String(
-                                                         suggestInputTerm.bytes,
+        Double latitude = Double.parseDouble(new String(suggestInputTerm.bytes,
                                                          displaySeperatorPos + 1,
-                                                         longitudeSeperatorPos - (displaySeperatorPos + 1))
+                                                         latitudeSeperatorPos - (displaySeperatorPos + 1))
                                                    );
-        Double latitude = Double.parseDouble(new String(
-                                                        suggestInputTerm.bytes,
-                                                        longitudeSeperatorPos + 1,
-                                                        suggestInputTerm.length - (longitudeSeperatorPos + 1))
+        Double longitude = Double.parseDouble(new String(suggestInputTerm.bytes,
+                                                        latitudeSeperatorPos + 1,
+                                                        suggestInputTerm.length - (latitudeSeperatorPos + 1))
                                                         );
         // combine the lookup string
         for (int level = minLevel; level <= maxLevel; level++) {
@@ -319,7 +326,10 @@ public class WFSTGeoSpatialLookup extends Lookup {
 
   /**
    * Return top 'num' suggestions with key as the prefix and restricted to the geographical
-   * area under shape
+   * area under shape.
+   *
+   * Note:- because results are returned from all the geohashes that are either inside or intersect
+   * the shape, some of the results returned might be outside the shape.
    * @param key
    *         prefix for the suggestions
    * @param shape

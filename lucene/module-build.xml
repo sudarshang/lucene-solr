@@ -491,7 +491,7 @@
     <property name="suggest-javadocs.uptodate" value="true"/>
   </target>
 
-	<!--Spatial Suggest depends on both the spatial and suggest modules. I have added it a separate module because neither 
+	<!--Spatial Suggest depends on both the spatial and suggest modules. I have added it a separate module because neither
 	of these modules should depend on each other.
 	-->
   <property name="spatial-suggest.jar" value="${common.dir}/build/spatial-suggest/lucene-spatial-suggest-${version}.jar"/>

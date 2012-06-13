@@ -5,10 +5,8 @@ package org.apache.lucene.search.spatial_suggest;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -16,9 +14,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 
-import org.apache.lucene.search.spell.TermFreqIterator;
 import org.apache.lucene.search.suggest.Lookup.LookupResult;
-import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
 import org.junit.Test;
@@ -34,11 +30,11 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     // the score for all of them have been randomly picked
     System.err.println("in the test");
     TermFreq keys[] = new TermFreq[] {
-        new TermFreq("men & women ctr|Men & Women Ctr|-122.420558|37.805775", 865),
-        new TermFreq("mo|Mo|-122.420558|37.805775", 1),
-        new TermFreq("moondog visions|Moondog Visions|-122.418358326|37.7494333411", 358),
-        new TermFreq("molarbytes|Molarbytes|-122.4634694|37.7640745", 691),
-        new TermFreq("m biz in berkeley|M Biz In Berkeley|-122.2907133|37.8478262", 847)
+        new TermFreq("men & women ctr|Men & Women Ctr|37.805775|-122.420558", 865),
+        new TermFreq("mo|Mo|37.805775|-122.420558", 1),
+        new TermFreq("moondog visions|Moondog Visions|37.7494333411|-122.418358326", 358),
+        new TermFreq("molarbytes|Molarbytes|37.7640745|-122.4634694", 691),
+        new TermFreq("m biz in berkeley|M Biz In Berkeley|37.8478262|-122.2907133", 847)
       };
 
     WFSTGeoSpatialLookup lookup = new WFSTGeoSpatialLookup(false, 4, 5);
@@ -112,10 +108,10 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     // Duplicate businesses ie same lookup, display, latitude, longitude but different scores
     // should only result in the higher scoring business being suggested
     TermFreq keys[] = new TermFreq[] {
-        new TermFreq("men & women ctr|Men & Women Ctr|-122.420558|37.805775", 865),
-        new TermFreq("men & women ctr|Men & Women Ctr|-122.420558|37.805775", 86),
-        new TermFreq("mo|Mo|-122.420558|37.805775", 1),
-        new TermFreq("moondog visions|Moondog Visions|-122.418358326|37.7494333411", 358)
+        new TermFreq("men & women ctr|Men & Women Ctr|37.805775|-122.420558", 865),
+        new TermFreq("men & women ctr|Men & Women Ctr|37.805775|-122.420558", 86),
+        new TermFreq("mo|Mo|37.805775|-122.420558", 1),
+        new TermFreq("moondog visions|Moondog Visions|37.7494333411|-122.418358326", 358)
     };
 
     WFSTGeoSpatialLookup lookup = new WFSTGeoSpatialLookup(false, 4, 5);
@@ -139,9 +135,9 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     // prefix. Since the matching algorithm does not rely on any properties of geohashes
     // involving proximity this should not be an issue
     TermFreq keys[] = new TermFreq[] {
-        new TermFreq("men & women ctr|Men & Women Ctr|-0.420558|37.805775", 865),
-        new TermFreq("mo|Mo|+0.205581|37.805775", 1),
-        new TermFreq("moondog visions|Moondog Visions|-0.418358326|37.7494333411", 358)
+        new TermFreq("men & women ctr|Men & Women Ctr|37.805775|-0.420558", 865),
+        new TermFreq("mo|Mo|37.805775|+0.205581", 1),
+        new TermFreq("moondog visions|Moondog Visions|37.7494333411|-0.418358326", 358)
     };
 
     WFSTGeoSpatialLookup lookup = new WFSTGeoSpatialLookup(false, 4, 5);
@@ -220,7 +216,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
       double longitude = min_longitude + (random().nextFloat() * width);
 
       // display string and lookup string are the same here
-      String input = lookupString + "|" + lookupString + "|" + longitude + "|" + latitude;
+      String input = lookupString + "|" + lookupString + "|" + latitude + "|" + longitude;
       keys[i] = new TermFreq(input, weight);
     }
 
