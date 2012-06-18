@@ -226,7 +226,7 @@ public class GeoSpatialBenchmarkTest extends LuceneTestCase{
         public Integer call() throws Exception {
           int v = 0;
           for (String term : input) {
-            v += lookup.lookup(term, rect, num).size();
+            v += lookup.lookup(term, rect, num).results.size();
           }
           return v;
         }

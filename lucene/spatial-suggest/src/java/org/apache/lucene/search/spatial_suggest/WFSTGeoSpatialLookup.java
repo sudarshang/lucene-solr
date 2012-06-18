@@ -75,6 +75,44 @@ public class WFSTGeoSpatialLookup extends Lookup {
   private static byte[] BYTE_SEPERATOR = {0,0};
 
   /**
+   * Helper class to filter out duplicates
+   */
+  private static class GeoHashLookupResults {
+    public final boolean hasDuplicates;
+    public final List<LookupResult> results;
+
+    public GeoHashLookupResults(boolean hasDuplicates,
+        List<LookupResult> results) {
+      this.hasDuplicates = hasDuplicates;
+      this.results = results;
+    }
+  }
+
+  /**
+   * Return type for geospatial lookup
+   */
+  public static class WFSTGeoSpatialLookupResults {
+    // total number of lookups perfomed
+    // against the FST
+    public final int numLookups;
+
+    // if duplicates prevented us from returning
+    // the 'true' top N suggestions
+    public final boolean couldNotReturnTopNSuggestions;
+
+    // the results that we are returning
+    public final List<LookupResult> results;
+
+    public WFSTGeoSpatialLookupResults(int numLookups,
+        boolean couldNotReturnTopNSuggestions,
+        List<LookupResult> results) {
+      this.numLookups = numLookups;
+      this.couldNotReturnTopNSuggestions = couldNotReturnTopNSuggestions;
+      this.results = results;
+    }
+
+  }
+  /**
   * GEOHASH_KEY_SEPERATOR UTF-8 bytes for '|' character
   */
   // any character that is not among the geohash prefix
@@ -106,7 +144,6 @@ public class WFSTGeoSpatialLookup extends Lookup {
   // setting this to True will ensure that
   // an exact match (if one exists) will be the first suggestion
   private final boolean exactFirst;
-
   /**
    * Creates a new geospatial suggester
    * @param exactFirst <code>true</code> if suggestions that match the
@@ -131,7 +168,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
    *
    * This means that the original format in file would need to be
    * suggestion|SuggestionDisplay|longitude|latitude\tweight as
-   * ther TermFreqIterator splits on the TAB character
+   * the TermFreqIterator splits on the TAB character
    *
    */
   @Override
@@ -149,6 +186,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
     boolean success = false;
     byte buffer[] = new byte[20];
 
+    // Combine the input with geohashes
     try {
       ByteArrayDataOutput output = new ByteArrayDataOutput(buffer);
       BytesRef suggestInputTerm;
@@ -195,20 +233,21 @@ public class WFSTGeoSpatialLookup extends Lookup {
           output.writeBytes(suggestInputTerm.bytes, 0, suggestSeperatorPos);
           output.writeByte((byte)0); // separator: not used, just for sort order
           output.writeByte((byte)0); // separator: not used, just for sort order
-          output.writeInt((int)encodeWeight(iterator.weight()));
+          output.writeInt(encodeWeight(iterator.weight()));
           output.writeBytes(suggestInputTerm.bytes, suggestSeperatorPos + 1,
                               displaySeperatorPos - (suggestSeperatorPos + 1));
           writer.write(buffer, 0, output.getPosition());
         }
       }
 
+      // sort combined input
       writer.close();
       new Sort().sort(tempInput, tempSorted);
       reader = new Sort.ByteSequencesReader(tempSorted);
 
-      // so now we have combined the input with the geohashes and sorted it
-      // we now need to remove duplicates ie multiple Starbucks in the
-      // area of a geohash. If we have duplicates in the input we store a single
+
+      // Remove duplicates eg. multiple Starbucks in the area of a geohash.
+      // In case of duplicates in the input store a single
       // entry in the FST with the lowest cost
 
       PairOutputs<Long,BytesRef> outputs = new PairOutputs<Long,BytesRef>(PositiveIntOutputs.getSingleton(true), ByteSequenceOutputs.getSingleton());
@@ -270,7 +309,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
           suggestInput = BytesRef.deepCopyOf(nextSuggestInput);
           suggestDisplay = BytesRef.deepCopyOf(nextSuggestDisplay);
         } else {
-          // we have a duplicate set the cost to the minimum of the 2 costs
+          // This is a duplicate so set the cost to the minimum of the 2 costs
           cost = Math.min(cost, nextCost);
         }
       }
@@ -338,12 +377,12 @@ public class WFSTGeoSpatialLookup extends Lookup {
    *          maximum number of suggestions to return
    * @return
    */
-  public List<LookupResult> lookup(CharSequence key, Shape shape,
+  public WFSTGeoSpatialLookupResults lookup(CharSequence key, Shape shape,
       int num) {
     assert num > 0;
 
     List<Node> hashesForShape = getHashesForShape(shape);
-    List<LookupResult> results = new ArrayList<LookupResult>(num);
+
     BytesRef keyBytes = new BytesRef(key);
 
     BytesRef scratch = new BytesRef(this.maxLevel +
@@ -352,8 +391,73 @@ public class WFSTGeoSpatialLookup extends Lookup {
     CharsRef spare = new CharsRef();
 
     LookupResult exactFirstResult = null;
+    GeoHashLookupResults geoHashLookup = geoHashLookup(num, hashesForShape, keyBytes, scratch,
+        spare, exactFirstResult, 1);
+
+    // check if we have duplicates
+    if (geoHashLookup.hasDuplicates == false) {
+      return new WFSTGeoSpatialLookupResults(1, false, geoHashLookup.results);
+    }
+
+    int numLookup = 1;
+
+    // If num * hashesForShape.size() are retrieved then the top num suggestions are guaranteed
+    // to be retrieved. There can only be hashesForShape duplicates of a particular suggestion. So
+    // even if there are duplicates for every suggestion that was returned there can be at most
+    // num * hashesForShape.size() duplicates.
+    // It is very  unlikely that every suggestion would have a duplicate in each of the
+    // geohash under consideration. If there is only one duplicate in every geohash
+    // then as long as hashesForShape.size() + num
+    // suggestions are requested the top num suggestions are guaranteed to be returned.
+    while(((numLookup - 1) * num) < hashesForShape.size()) {
+      numLookup++;
+      // lookup with more entries to get rid of duplicates
+      geoHashLookup = geoHashLookup(num * numLookup, hashesForShape, keyBytes, scratch,
+          spare, exactFirstResult, num);
+
+      // if there are no duplicates or if there are already at least
+      // 'num' unique results just return them
+      if (geoHashLookup.hasDuplicates == false ||
+          geoHashLookup.results.size() >= num
+          ) {
+        return new WFSTGeoSpatialLookupResults(numLookup, false,
+            geoHashLookup.results.subList(0, Math.min(num, geoHashLookup.results.size())));
+      }
+    }
+
+    return new WFSTGeoSpatialLookupResults(numLookup, true,
+        geoHashLookup.results.subList(0, Math.min(num, geoHashLookup.results.size())));
+  }
+
+  /**
+   * Performs the lookup against the fst by combining the geoHashes and the prefix.
+   * Returns the suggestions and a flag to indicate that duplicates
+   * @param num
+   *          number of suggestions to return
+   * @param hashesForShape
+   *          list of geohashes corresponding to the geo shape to restrict suggestions
+   * @param keyBytes
+   *          lookup prefix in bytes
+   * @param scratch
+   *          pre allocated byte array to combine geohash and prefix
+   * @param spare
+   *          pre allocated character array to convert suggestion to UTF-16
+   * @param exactFirstResult
+   *          true if the exact match is to be returned first
+   * @return
+   *     GeoHashLookupResults
+   *           hasDuplicates
+   *              true if duplicates were retrieved
+   *           results
+   *              suggestions
+   */
+  private GeoHashLookupResults geoHashLookup(int num, List<Node> hashesForShape,
+      BytesRef keyBytes, BytesRef scratch,
+      CharsRef spare, LookupResult exactFirstResult,
+      int numLookup) {
     Util.TopNSearcher<Pair<Long,BytesRef>> searcher = new Util.TopNSearcher<Pair<Long,BytesRef>>(fst, num, weightComparator);
 
+    List<LookupResult> results = new ArrayList<LookupResult>(num);
     // for each of the geohash contained by our shape
     // we append the key and get the fst node corresponding
     // to that input. The nodes are queued up as seeds for
@@ -414,11 +518,19 @@ public class WFSTGeoSpatialLookup extends Lookup {
     if (exactFirstResult != null) {
       results.add(exactFirstResult);
       if (results.size() == num) {
-        return results;
+        return new GeoHashLookupResults(false, results);
       }
     }
 
+    int duplicateCount = 0;
+    BytesRef[] previousCompletions = new BytesRef[completions.length];
     for (MinResult<Pair<Long,BytesRef>> completion : completions) {
+      // if this completion has been seen increment duplicateCount
+      if (alreadySeen(previousCompletions, completion.output.output2)) {
+        duplicateCount++;
+        continue;
+      }
+      // add completion to result
       spare.grow(completion.output.output2.length);
       UnicodeUtil.UTF8toUTF16(completion.output.output2, spare);
       results.add(new LookupResult(spare.toString(), decodeWeight(completion.output.output1)));
@@ -428,7 +540,37 @@ public class WFSTGeoSpatialLookup extends Lookup {
       }
     }
 
-    return results;
+    if (duplicateCount == 0) {
+      return new GeoHashLookupResults(false,
+          results);
+    }
+
+    // we want to check if duplicates are preventing us from returning suggestions
+    // that we should have returned.
+    // if results.size() + duplicateCount < num then we have already returned
+    // all the suggestions we could.
+    return new GeoHashLookupResults(results.size() + duplicateCount >= num,
+        results);
+  }
+
+  private boolean alreadySeen(BytesRef[] previousCompletions,
+      BytesRef completion) {
+
+    int index = 0;
+    for(; index < previousCompletions.length; index++) {
+      if (previousCompletions[index] == null) {
+        break;
+      }
+      else if (completion.bytesEquals(previousCompletions[index])) {
+        return true;
+      }
+    }
+
+    if (index == previousCompletions.length) {
+      return false;
+    }
+    previousCompletions[index] = completion;
+    return false;
   }
 
   /**

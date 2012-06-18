@@ -26,7 +26,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
 
   @Test
   public void testWFSTGeoSpatialLookupTest() throws FileNotFoundException, IOException {
-    // the locations of the first 4 businesses are in San Francisco
+    // the locations of the first 4 suggestions are in San Francisco
     // the score for all of them have been randomly picked
     System.err.println("in the test");
     TermFreq keys[] = new TermFreq[] {
@@ -44,69 +44,69 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     RectangleImpl rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
         37.693601037244406, 37.856422880849514);
 
-    List<LookupResult> lookupResults = lookup.lookup("m", rect, 3);
+    List<LookupResult> lookupResults = lookup.lookup("m", rect, 3).results;
     assertEquals(3, lookupResults.size());
     assertEquals("Moondog Visions", lookupResults.get(2).key);
 
-    lookupResults = lookup.lookup("m", rect, 2);
+    lookupResults = lookup.lookup("m", rect, 2).results;
     assertEquals(2, lookupResults.size());
     assertEquals("Molarbytes", lookupResults.get(1).key);
 
-    lookupResults = lookup.lookup("m", rect, 1);
+    lookupResults = lookup.lookup("m", rect, 1).results;
     assertEquals(1, lookupResults.size());
     assertEquals("Men & Women Ctr", lookupResults.get(0).key);
 
-    lookupResults = lookup.lookup("molar", rect, 1);
+    lookupResults = lookup.lookup("molar", rect, 1).results;
     assertEquals(1, lookupResults.size());
     assertEquals("Molarbytes", lookupResults.get(0).key);
 
-    lookupResults = lookup.lookup("m", rect, 4);
+    lookupResults = lookup.lookup("m", rect, 4).results;
     assertEquals(4, lookupResults.size());
 
-    lookupResults = lookup.lookup("m", rect, 5);
+    lookupResults = lookup.lookup("m", rect, 5).results;
     assertEquals(4, lookupResults.size());
 
     // test with exact first = true
     lookup = new WFSTGeoSpatialLookup(true, 4, 5);
     lookup.build(new TermFreqArrayIterator(keys));
-    lookupResults = lookup.lookup("m", rect, 3);
+    lookupResults = lookup.lookup("m", rect, 3).results;
     assertEquals(3, lookupResults.size());
     assertEquals("Moondog Visions", lookupResults.get(2).key);
 
-    lookupResults = lookup.lookup("m", rect, 2);
+    lookupResults = lookup.lookup("m", rect, 2).results;
     assertEquals(2, lookupResults.size());
     assertEquals("Molarbytes", lookupResults.get(1).key);
 
-    lookupResults = lookup.lookup("m", rect, 1);
+    lookupResults = lookup.lookup("m", rect, 1).results;
     assertEquals(1, lookupResults.size());
     assertEquals("Men & Women Ctr", lookupResults.get(0).key);
 
-    lookupResults = lookup.lookup("molar", rect, 1);
+    lookupResults = lookup.lookup("molar", rect, 1).results;
     assertEquals(1, lookupResults.size());
     assertEquals("Molarbytes", lookupResults.get(0).key);
 
-    lookupResults = lookup.lookup("m", rect, 4);
+    lookupResults = lookup.lookup("m", rect, 4).results;
     assertEquals(4, lookupResults.size());
 
-    lookupResults = lookup.lookup("m", rect, 5);
+    lookupResults = lookup.lookup("m", rect, 5).results;
     assertEquals(4, lookupResults.size());
 
-    lookupResults = lookup.lookup("molarbytes", rect, 1);
+    lookupResults = lookup.lookup("molarbytes", rect, 1).results;
     assertEquals(1, lookupResults.size());
 
     // test with much larger rectangle which should have geohashes smaller
     // in length than minLevel
     lookupResults = lookup.lookup("m",
                                 new RectangleImpl(-123.0, -120.0, 36.0, 38.0),
-                                  5);
+                                  5).results;
     assertEquals(4, lookupResults.size());
 
   }
 
   @Test
   public void testDuplicateBusinesses() throws FileNotFoundException, IOException {
-    // Duplicate businesses ie same lookup, display, latitude, longitude but different scores
-    // should only result in the higher scoring business being suggested
+    // Duplicate suggestions ie same lookup, display, latitude, longitude but different scores
+    // should only result in the higher scoring suggestion being returned
     TermFreq keys[] = new TermFreq[] {
         new TermFreq("men & women ctr|Men & Women Ctr|37.805775|-122.420558", 865),
         new TermFreq("men & women ctr|Men & Women Ctr|37.805775|-122.420558", 86),
@@ -121,13 +121,36 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     RectangleImpl rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
         37.693601037244406, 37.856422880849514);
 
-    List<LookupResult> lookupResults = lookup.lookup("m", rect, 3);
+    List<LookupResult> lookupResults = lookup.lookup("m", rect, 3).results;
     assertEquals(3, lookupResults.size());
     assertEquals(865, lookupResults.get(0).value);
     assertEquals("Men & Women Ctr", lookupResults.get(0).key);
     assertEquals("Moondog Visions", lookupResults.get(1).key);
     assertEquals("Mo", lookupResults.get(2).key);
   }
+
+  @Test
+  public void testSameDisplayAdjacentGeoHash() throws FileNotFoundException, IOException {
+    // Same display in adjacent geohashes should be filtered
+    // We shall return only the suggestions with the highest score
+    TermFreq keys[] = new TermFreq[] {
+        new TermFreq("starbucks|Starbucks|37.77798|-122.413923", 865),
+        new TermFreq("starbucks|Starbucks|37.77798|-122.454601", 86),
+    };
+
+    WFSTGeoSpatialLookup lookup = new WFSTGeoSpatialLookup(false, 4, 5);
+    lookup.build(new TermFreqArrayIterator(keys));
+
+    // build a Rectangle covering the first 2 elements from keys
+    RectangleImpl rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
+        37.693601037244406, 37.856422880849514);
+
+    List<LookupResult> lookupResults = lookup.lookup("s", rect, 3).results;
+    assertEquals(1, lookupResults.size());
+    assertEquals(865, lookupResults.get(0).value);
+    assertEquals("Starbucks", lookupResults.get(0).key);
+  }
+
 
   @Test
   public void testBusinessesAroundPrimeMeridian() throws FileNotFoundException, IOException {
@@ -147,7 +170,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     RectangleImpl rect = new RectangleImpl(-0.52159118652344, +0.31697082519531,
         37.693601037244406, 37.856422880849514);
 
-    List<LookupResult> lookupResults = lookup.lookup("m", rect, 3);
+    List<LookupResult> lookupResults = lookup.lookup("m", rect, 3).results;
     assertEquals(3, lookupResults.size());
     assertEquals("Men & Women Ctr", lookupResults.get(0).key);
     assertEquals("Moondog Visions", lookupResults.get(1).key);
@@ -226,7 +249,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     Random random = new Random(random().nextLong());
     for (String prefix : allPrefixes) {
       final int topN = _TestUtil.nextInt(random, 1, 10);
-      List<LookupResult> r = suggester.lookup(_TestUtil.stringToCharSequence(prefix, random), rect, topN);
+      List<LookupResult> r = suggester.lookup(_TestUtil.stringToCharSequence(prefix, random), rect, topN).results;
 
       // 2. go thru whole treemap (slowCompletor) and check its actually the best suggestion
       final List<LookupResult> matches = new ArrayList<LookupResult>();
