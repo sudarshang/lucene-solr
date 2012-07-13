@@ -20,6 +20,7 @@ import org.apache.lucene.util._TestUtil;
 import org.junit.Test;
 import org.apache.lucene.search.spatial_suggest.WFSTGeoSpatialLookup;
 
+import com.spatial4j.core.shape.Rectangle;
 import com.spatial4j.core.shape.simple.RectangleImpl;
 
 public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
@@ -41,7 +42,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     lookup.build(new TermFreqArrayIterator(keys));
 
     // build a Rectangle covering the first 4 elements from keys
-    RectangleImpl rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
+    Rectangle rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
         37.693601037244406, 37.856422880849514);
 
     List<LookupResult> lookupResults = lookup.lookup("m", rect, 3).results;
@@ -118,7 +119,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     lookup.build(new TermFreqArrayIterator(keys));
 
     // build a Rectangle covering the first 4 elements from keys
-    RectangleImpl rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
+    Rectangle rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
         37.693601037244406, 37.856422880849514);
 
     List<LookupResult> lookupResults = lookup.lookup("m", rect, 3).results;
@@ -142,7 +143,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     lookup.build(new TermFreqArrayIterator(keys));
 
     // build a Rectangle covering the first 2 elements from keys
-    RectangleImpl rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
+    Rectangle rect = new RectangleImpl(-122.52159118652344, -122.31697082519531,
         37.693601037244406, 37.856422880849514);
 
     List<LookupResult> lookupResults = lookup.lookup("s", rect, 3).results;
@@ -167,7 +168,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     lookup.build(new TermFreqArrayIterator(keys));
 
     // build a Rectangle covering all the elements from keys
-    RectangleImpl rect = new RectangleImpl(-0.52159118652344, +0.31697082519531,
+    Rectangle rect = new RectangleImpl(-0.52159118652344, +0.31697082519531,
         37.693601037244406, 37.856422880849514);
 
     List<LookupResult> lookupResults = lookup.lookup("m", rect, 3).results;
@@ -209,7 +210,7 @@ public class WFSTGeoSpatialLookupTest extends LuceneTestCase {
     double min_latitude = 37.350580399999998;
     double max_latitude = 37.421506200000003;
 
-    RectangleImpl rect = new RectangleImpl(min_longitude, max_longitude,
+    Rectangle rect = new RectangleImpl(min_longitude, max_longitude,
         min_latitude, max_latitude);
 
     double height = rect.getHeight();

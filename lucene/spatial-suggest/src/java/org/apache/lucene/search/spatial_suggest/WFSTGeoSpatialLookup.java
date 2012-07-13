@@ -75,7 +75,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
   private static byte[] BYTE_SEPERATOR = {0,0};
 
   /**
-   * Helper class to filter out duplicates
+   * Class to hold results of the geohashlookup
    */
   private static class GeoHashLookupResults {
     public final boolean hasDuplicates;
@@ -92,7 +92,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
    * Return type for geospatial lookup
    */
   public static class WFSTGeoSpatialLookupResults {
-    // total number of lookups perfomed
+    // total number of lookups performed
     // against the FST
     public final int numLookups;
 
@@ -390,42 +390,43 @@ public class WFSTGeoSpatialLookup extends Lookup {
         GEOHASH_KEY_SEPERATOR.length);
     CharsRef spare = new CharsRef();
 
-    LookupResult exactFirstResult = null;
     GeoHashLookupResults geoHashLookup = geoHashLookup(num, hashesForShape, keyBytes, scratch,
-        spare, exactFirstResult, 1);
+        spare);
 
     // check if we have duplicates
-    if (geoHashLookup.hasDuplicates == false) {
+    if (!geoHashLookup.hasDuplicates) {
       return new WFSTGeoSpatialLookupResults(1, false, geoHashLookup.results);
     }
 
-    int numLookup = 1;
-
+    int numLookupAttempts = 2;
     // If num * hashesForShape.size() are retrieved then the top num suggestions are guaranteed
-    // to be retrieved. There can only be hashesForShape duplicates of a particular suggestion. So
-    // even if there are duplicates for every suggestion that was returned there can be at most
-    // num * hashesForShape.size() duplicates.
-    // It is very  unlikely that every suggestion would have a duplicate in each of the
-    // geohash under consideration. If there is only one duplicate in every geohash
-    // then as long as hashesForShape.size() + num
-    // suggestions are requested the top num suggestions are guaranteed to be returned.
-    while(((numLookup - 1) * num) < hashesForShape.size()) {
-      numLookup++;
+    // to be retrieved. There can only be hashesForShape duplicates of a particular suggestion as we
+    // de-dupe suggestions during the FST build step. So even if there are duplicates for every suggestion
+    // that was returned there can be at most num * hashesForShape.size() duplicates.
+    // It is very unlikely that every suggestion would have a duplicate in each of the
+    // geohashes under consideration. If there is only one duplicate in every geohash
+    // then as long as hashesForShape.size() + num suggestions are requested the
+    // top num suggestions are guaranteed to be returned.
+
+    // Use the above heuristic to do partial deduplication by selecting up to hashesForShape + num - 1
+    // suggestions. Since the cost of the lookup is dependent on the number of suggestions increase
+    // the number of suggestions by numLookup in each step till we hit the heuristic limit.
+    for ( ; numLookupAttempts * num < hashesForShape.size() + num; numLookupAttempts++) {
       // lookup with more entries to get rid of duplicates
-      geoHashLookup = geoHashLookup(num * numLookup, hashesForShape, keyBytes, scratch,
-          spare, exactFirstResult, num);
+      geoHashLookup = geoHashLookup(num * numLookupAttempts, hashesForShape, keyBytes, scratch,
+          spare);
 
       // if there are no duplicates or if there are already at least
       // 'num' unique results just return them
-      if (geoHashLookup.hasDuplicates == false ||
+      if (!geoHashLookup.hasDuplicates ||
           geoHashLookup.results.size() >= num
           ) {
-        return new WFSTGeoSpatialLookupResults(numLookup, false,
+        return new WFSTGeoSpatialLookupResults(numLookupAttempts, false,
             geoHashLookup.results.subList(0, Math.min(num, geoHashLookup.results.size())));
       }
     }
 
-    return new WFSTGeoSpatialLookupResults(numLookup, true,
+    return new WFSTGeoSpatialLookupResults(numLookupAttempts, true,
         geoHashLookup.results.subList(0, Math.min(num, geoHashLookup.results.size())));
   }
 
@@ -442,8 +443,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
    *          pre allocated byte array to combine geohash and prefix
    * @param spare
    *          pre allocated character array to convert suggestion to UTF-16
-   * @param exactFirstResult
-   *          true if the exact match is to be returned first
+   *
    * @return
    *     GeoHashLookupResults
    *           hasDuplicates
@@ -453,9 +453,10 @@ public class WFSTGeoSpatialLookup extends Lookup {
    */
   private GeoHashLookupResults geoHashLookup(int num, List<Node> hashesForShape,
       BytesRef keyBytes, BytesRef scratch,
-      CharsRef spare, LookupResult exactFirstResult,
-      int numLookup) {
+      CharsRef spare) {
     Util.TopNSearcher<Pair<Long,BytesRef>> searcher = new Util.TopNSearcher<Pair<Long,BytesRef>>(fst, num, weightComparator);
+
+    LookupResult exactFirstResult = null;
 
     List<LookupResult> results = new ArrayList<LookupResult>(num);
     // for each of the geohash contained by our shape
@@ -476,9 +477,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
         scratch.length = hashBytes.length + GEOHASH_KEY_SEPERATOR.length + keyBytes.length;
 
         Arc<Pair<Long,BytesRef>> arc = new Arc<Pair<Long,BytesRef>>();
-        Pair<Long,BytesRef> prefixOutput;
-
-        prefixOutput = lookupPrefix(scratch, arc);
+        Pair<Long,BytesRef> prefixOutput = lookupPrefix(scratch, arc);
         // no prefixOutput indicates we did not
         // find anything for the current geohash key combination
         if (prefixOutput == null) {
@@ -526,7 +525,7 @@ public class WFSTGeoSpatialLookup extends Lookup {
     BytesRef[] previousCompletions = new BytesRef[completions.length];
     for (MinResult<Pair<Long,BytesRef>> completion : completions) {
       // if this completion has been seen increment duplicateCount
-      if (alreadySeen(previousCompletions, completion.output.output2)) {
+      if (checkAlreadySeenElseAdd(previousCompletions, completion.output.output2)) {
         duplicateCount++;
         continue;
       }
@@ -545,15 +544,22 @@ public class WFSTGeoSpatialLookup extends Lookup {
           results);
     }
 
-    // we want to check if duplicates are preventing us from returning suggestions
-    // that we should have returned.
-    // if results.size() + duplicateCount < num then we have already returned
-    // all the suggestions we could.
-    return new GeoHashLookupResults(results.size() + duplicateCount >= num,
-        results);
+    // This method is required to return upto num suggestions. For certain
+    // prefixes there may not num suggestions that can be generated
+    // If results.size + duplicateCount is less than num it means that
+    // duplicates have not prevented the correct top suggestions from being
+    // returned.
+    return new GeoHashLookupResults(results.size() + duplicateCount >= num, results);
   }
 
-  private boolean alreadySeen(BytesRef[] previousCompletions,
+  /**
+   * Return true if a completion already exists in the array
+   * else add it to the array.
+   * @param previousCompletions
+   * @param completion
+   * @return
+   */
+  private boolean checkAlreadySeenElseAdd(BytesRef[] previousCompletions,
       BytesRef completion) {
 
     int index = 0;
@@ -566,9 +572,6 @@ public class WFSTGeoSpatialLookup extends Lookup {
       }
     }
 
-    if (index == previousCompletions.length) {
-      return false;
-    }
     previousCompletions[index] = completion;
     return false;
   }
